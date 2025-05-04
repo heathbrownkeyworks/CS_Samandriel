@@ -1,16 +1,17 @@
 #include "log.h"
+#include "hook.h"
 
 
 void OnDataLoaded()
 {
-   
+    Hooks::Install();
 }
 
 void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 {
 	switch (a_msg->type) {
 	case SKSE::MessagingInterface::kDataLoaded:
-        
+        OnDataLoaded();
 		break;
 	case SKSE::MessagingInterface::kPostLoad:
 		break;
