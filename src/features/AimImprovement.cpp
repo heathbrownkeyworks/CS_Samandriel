@@ -1,5 +1,6 @@
-#include "features/AimImprovement.h"
-#include "util.h"
+#include "AimImprovement.h"
+#include "../util.h"
+#include <random>
 
 namespace Features
 {
@@ -114,23 +115,23 @@ namespace Features
         // Apply small random deviation
         float deviationAngle = (1.0f - accuracyFactor) * 0.05f;  // Max 5 degree deviation at worst accuracy
         
-        // Create rotation quaternion for small random deviation
-        RE::NiPoint3 randomAxis(
-            (rand() % 1000 - 500) / 500.0f,
-            (rand() % 1000 - 500) / 500.0f,
-            (rand() % 1000 - 500) / 500.0f
-        );
-        randomAxis.Unitize();
+        // Create random deviation using standard random number generation
+        static std::random_device rd;
+        static std::mt19937 gen(rd());
+        static std::uniform_real_distribution<float> dis(-1.0f, 1.0f);
         
-        RE::NiQuaternion deviation;
-        deviation.w = cos(deviationAngle / 2.0f);
-        float sinHalfAngle = sin(deviationAngle / 2.0f);
-        deviation.x = randomAxis.x * sinHalfAngle;
-        deviation.y = randomAxis.y * sinHalfAngle;
-        deviation.z = randomAxis.z * sinHalfAngle;
+        RE::NiPoint3 randomAxis(dis(gen), dis(gen), dis(gen));
+        if (randomAxis.Length() > 0.0f) {
+            randomAxis.Unitize();
+        }
         
-        // Apply deviation to aim vector
-        aimVector = MathUtil::Angle::RotateVector(aimVector, deviation);
+        // Apply deviation using trigonometry instead of quaternions
+        if (deviationAngle > 0.0f && randomAxis.Length() > 0.0f) {
+            // Simple rotation approximation for small angles
+            RE::NiPoint3 crossProduct = aimVector.Cross(randomAxis);
+            aimVector += crossProduct * std::sin(deviationAngle);
+            aimVector.Unitize();
+        }
         
         return aimVector;
     }
