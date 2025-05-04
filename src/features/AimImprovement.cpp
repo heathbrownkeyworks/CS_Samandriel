@@ -1,6 +1,8 @@
 #include "AimImprovement.h"
 #include "../util.h"
 #include <random>
+#include <cmath>
+#include <cstring>
 
 namespace Features
 {
@@ -47,9 +49,11 @@ namespace Features
         RE::NiPoint3 improvedAimVector = CalculateImprovedAimVector(shooter, targetActor);
         
         // Apply the improved aim to the projectile
-        if (projectile->linearVelocity.Length() > 0.0f) {
-            float speed = projectile->linearVelocity.Length();
-            projectile->linearVelocity = improvedAimVector * speed;
+        // Access projectile runtime data properly
+        auto& projData = projectile->GetProjectileRuntimeData();
+        if (projData.linearVelocity.Length() > 0.0f) {
+            float speed = projData.linearVelocity.Length();
+            projData.linearVelocity = improvedAimVector * speed;
         }
     }
 
@@ -65,7 +69,7 @@ namespace Features
             return false;
         }
 
-        return strcmp(editorID, "Samandriel_CSVP") == 0;
+        return std::strcmp(editorID, "Samandriel_CSVP") == 0;
     }
 
     RE::NiPoint3 AimImprovement::CalculateImprovedAimVector(RE::Actor* shooter, RE::Actor* target)
@@ -91,18 +95,35 @@ namespace Features
         // Predict target movement if they're moving
         auto targetProcess = target->GetActorRuntimeData().currentProcess;
         if (targetProcess) {
-            RE::NiPoint3 targetVelocity;
-            targetProcess->GetVelocity(targetVelocity);
+            // Check if target is moving
+            bool isMoving = target->IsMoving();
             
-            if (targetVelocity.Length() > 10.0f) {  // Target is moving
-                // Calculate time to target based on arrow speed (roughly 3000 units/sec for vanilla arrows)
-                float timeToTarget = distance / 3000.0f;
+            if (isMoving && target->Is3DLoaded()) {
+                // Get movement direction using available methods
+                // We'll approximate movement based on the target's heading and movement state
+                float targetHeading = target->GetHeading(false); // Get actor's heading in radians
                 
-                // Add predicted movement
-                targetPos += targetVelocity * timeToTarget * MOVING_TARGET_PREDICTION_FACTOR;
+                // Convert heading to direction vector
+                RE::NiPoint3 forwardVector;
+                forwardVector.x = std::sin(targetHeading);
+                forwardVector.y = std::cos(targetHeading);
+                forwardVector.z = 0.0f;
                 
-                // Recalculate aim vector
-                aimVector = targetPos - shooterPos;
+                // Estimate movement speed (using a constant approximation since GetActorValue isn't available)
+                float movementSpeed = target->IsRunning() ? 300.0f : 150.0f; // Approximate speeds
+                
+                RE::NiPoint3 movementDir = forwardVector * movementSpeed;
+                
+                if (movementDir.Length() > 10.0f) {  // Target is moving significantly
+                    // Calculate time to target based on arrow speed (roughly 3000 units/sec for vanilla arrows)
+                    float timeToTarget = distance / 3000.0f;
+                    
+                    // Add predicted movement
+                    targetPos += movementDir * timeToTarget * MOVING_TARGET_PREDICTION_FACTOR;
+                    
+                    // Recalculate aim vector
+                    aimVector = targetPos - shooterPos;
+                }
             }
         }
 
